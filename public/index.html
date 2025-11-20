@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>btl ChatBot</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+    /* --- BASE --- */
+    :root { --purple: #9333ea; --purple-2: #a855f7; --dark: #0c001f; }
+    html,body { height: 100%; margin: 0; }
+    body {
+        background: linear-gradient(135deg, #1f013d 0%, var(--dark) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+        color: #fff;
+        transition: all 0.4s ease;
+        padding: 2rem;
+    }
+
+    /* --- GLASS --- */
+    .glass-container {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.06);
+        box-shadow: 0 6px 30px rgba(0,0,0,0.35);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border-radius: 14px;
+    }
+    
+    /* --- MODAL --- */
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 1rem;
+    }
+    .modal-content {
+        background: #111111;
+        padding: 1.5rem;
+        border-radius: 12px;
+        width: 90%;
+        max-width: 400px;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+    }
+    .tool-button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.5rem;
+        background: rgba(147,51,234, 0.1);
+        border: 1px solid rgba(147,51,234, 0.5);
+        border-radius: 8px;
+        color: white;
+        font-weight: 500;
+        transition: background 0.2s, transform 0.1s;
+    }
+    .tool-button:hover { background: rgba(147,51,234, 0.25); }
+    .tool-button:active { transform: scale(0.99); }
+
+    /* --- VOICE RECORDER MODAL --- */
+    #voice-modal .modal-content {
+        max-width: 350px;
+        text-align: center;
+    }
+    #voice-visualizer {
+        width: 100%;
+        height: 100px;
+        margin: 1rem 0;
+        background: rgba(0,0,0,0.2);
+        border-radius: 8px;
+        position: relative;
+        overflow: hidden;
+    }
+    #voice-wave {
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, var(--purple), transparent);
+        opacity: 0.3;
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.1s;
+    }
+    #voice-timer {
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin: 0.5rem 0;
+        color: var(--purple);
+    }
+    .voice-controls {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    .voice-button {
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    #start-record {
+        background: var(--purple);
+        color: white;
+    }
+    #start-record:hover { background: var(--purple-2); }
+    #stop-record {
+        background: #dc2626;
+        color: white;
+        display: none;
+    }
+    #stop-record:hover { background: #ef4444; }
+    #cancel-record {
+        background: #6b7280;
+        color: white;
+    }
+    #cancel-record:hover { background: #9ca3af; }
+
+    /* --- EYES ROW (Chat Only) --- */
+    #eyes {
+        display: none; /* Hidden by default, shown when chat-view is active */
+        gap: 2.5rem;
+        margin-bottom: 1.75rem;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+    }
+
+    .eye {
+        width: 140px;
+        height: 110px;
+        background: var(--purple);
+        border-radius: 20px;
+        box-shadow: 0 0 30px var(--purple), 0 0 60px rgba(147,51,234,0.25);
+        position: relative;
+        transition: transform 0.08s linear, filter 0.18s ease, height 0.18s ease;
+        will-change: transform;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* states */
+    .thinking { animation: pulse 0.9s infinite ease-in-out; }
+    .reply { height: 70px; border-radius: 40px; filter: brightness(1.7); }
+    .talking { animation: bounce-chat 0.45s infinite alternate ease-in-out; }
+
+    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(0.9); } 100% { transform: scale(1); } }
+    @keyframes bounce-chat { 0% { transform: translateY(0); } 100% { transform: translateY(-10px); } }
+
+    /* --- CHAT UI --- */
+    #chat-view { display: none; /* Hidden by default */ }
+    #chat-container {
+        max-height: 60vh;
+        overflow-y: auto;
+        width: 420px;
+        padding-top: 1rem; /* Added padding to top */
+    }
+
+    #chat-container::-webkit-scrollbar { width: 6px; }
+    #chat-container::-webkit-scrollbar-thumb { background: var(--purple); border-radius: 3px; }
+    #chat-container::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+
+    .message {
+        margin-bottom: 0.75rem;
+        padding: 0.75rem;
+        border-radius: 12px;
+        max-width: 80%;
+        line-height: 1.4;
+        word-wrap: break-word;
+        white-space: pre-wrap; /* Preserve formatting for lists/summaries */
+    }
+    .user-message {
+        background: var(--purple);
+        color: #fff;
+        margin-left: auto;
+        text-align: right;
+        border-bottom-right-radius: 0;
+    }
+    .bot-message {
+        background: #27272a;
+        color: #fff;
+        margin-right: auto;
+        border-bottom-left-radius: 0;
+    }
+    .tool-message {
+        background: #333;
+        color: #ddd;
+        font-style: italic;
+        text-align: center;
+        margin: 0.75rem auto;
+        max-width: 95%;
+        border-radius: 12px;
+        font-size: 0.85rem;
+    }
+    .voice-message {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        background: rgba(147,51,234, 0.2);
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+    }
+    .voice-message .play-button {
+        background: var(--purple);
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+    .voice-message .play-button:hover { background: var(--purple-2); }
+    .voice-message .duration {
+        font-size: 0.8rem;
+        color: #ccc;
+    }
+
+    /* --- AUTH UI --- */
+    #login-view {
+        width: 100%;
+        max-width: 380px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .auth-card {
+        padding: 2.5rem;
+        width: 100%;
+    }
+    .input-field {
+        width: 100%;
+        padding: 0.75rem;
+        margin-bottom: 1rem;
+        border: 1px solid rgba(147,51,234,0.3);
+        border-radius: 8px;
+        background: rgba(0,0,0,0.3);
+        color: white;
+        transition: border-color 0.2s;
+    }
+    .input-field:focus {
+        border-color: var(--purple-2);
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(147,51,234,0.5);
+    }
+    .auth-button {
+        width: 100%;
+        padding: 0.75rem;
+        background: var(--purple);
+        color: white;
+        font-weight: bold;
+        border-radius: 8px;
+        transition: background-color 0.2s;
+    }
+    .auth-button:hover { background: var(--purple-2); }
+    .auth-button:disabled { background: #5a5a5a; cursor: not-allowed; }
+
+    /* Nav */
+    #header { position: fixed; top: 1rem; right: 1rem; z-index: 1000; display: none; } /* Hidden until logged in */
+    #nav-menu {
+        position: fixed;
+        top: 0;
+        right: 0;
+        height: 100vh;
+        z-index: 990;
+        transform: translateX(100%);
+        transition: transform 0.28s ease-in-out;
+        box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+        background: #111111;
+        border-left: 1px solid rgba(147,51,234,0.12);
+        padding: 2rem;
+    }
+    #nav-menu.active { transform: translateX(0); }
+</style>
+</head>
+
+<body>
+
+    <!-- --- MODAL FOR GEMINI TOOLS --- -->
+    <div id="tool-modal" class="modal" onclick="closeModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 class="text-xl font-bold mb-4 text-center" style="color:var(--purple-2);">✨ AI Tools ✨</h3>
+            <p class="text-sm text-gray-400 mb-4 text-center">Analyze your current conversation:</p>
+
+            <button class="tool-button" onclick="handleGeminiTool('summarize')">
+                <span>Summarize Conversation</span>
+                <span class="text-lg text-yellow-300">📝</span>
+            </button>
+            <button class="tool-button" onclick="handleGeminiTool('suggest')">
+                <span>Suggest Next Steps</span>
+                <span class="text-lg text-cyan-300">💡</span>
+            </button>
+            <button class="tool-button" onclick="handleGeminiTool('tasks')">
+                <span>Generate a Task List</span>
+                <span class="text-lg text-green-300">✅</span>
+            </button>
+            
+            <button class="auth-button mt-4 bg-gray-700 hover:bg-gray-600" onclick="document.getElementById('tool-modal').style.display = 'none'">
+                Close
+            </button>
+        </div>
+    </div>
+
+    <!-- --- VOICE RECORDER MODAL --- -->
+    <div id="voice-modal" class="modal" onclick="closeVoiceModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h3 class="text-xl font-bold mb-4 text-center" style="color:var(--purple-2);">🎤 Voice Message</h3>
+            <p class="text-sm text-gray-400 mb-4 text-center">Click record to start speaking</p>
+
+            <div id="voice-visualizer">
+                <div id="voice-wave"></div>
+            </div>
+            <div id="voice-timer">00:00</div>
+
+            <div class="voice-controls">
+                <button id="start-record" class="voice-button">Record</button>
+                <button id="stop-record" class="voice-button">Stop</button>
+                <button id="cancel-record" class="voice-button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- NAV/HEADER (Only visible when logged in) -->
+    <div id="header" class="p-4">
+        <div id="menu-icon" class="text-3xl cursor-pointer" style="color:var(--purple);">☰</div>
+    </div>
+
+    <div id="nav-menu" class="">
+        <a href="#" id="about-link" class="block py-4 text-white hover:text-var(--purple)">About Btl</a>
+        <a href="#" id="contact-link" class="block py-4 text-white hover:text-var(--purple)">Contact Info</a>
+        <button id="logout-button" class="block py-4 text-var(--purple) font-bold w-full text-left mt-4">Logout</button>
+    </div>
+
+
+    <!-- --- 1. AUTHENTICATION VIEW --- -->
+    <div id="login-view">
+        <h1 class="text-4xl font-extrabold mb-8 text-center" style="color:var(--purple-2);">Btl AI</h1>
+        
+        <div class="auth-card glass-container">
+
+            <!-- Shared Error/Message Display -->
+            <div id="auth-message" class="mb-4 p-3 bg-red-800/50 text-red-300 rounded-lg text-sm hidden"></div>
+
+            <!-- Login Form -->
+            <form id="login-form" class="auth-form">
+                <h2 class="text-2xl font-semibold mb-6 text-white text-center">Login</h2>
+                <input type="email" id="login-email" class="input-field" placeholder="Email" required>
+                <input type="password" id="login-password" class="input-field" placeholder="Password" required>
+                <button type="submit" id="login-button" class="auth-button">Sign In</button>
+                <p class="mt-4 text-center text-sm text-gray-400">
+                    Need an account? <a href="#" id="show-register" class="text-var(--purple) hover:text-var(--purple-2) font-medium">Register</a>
+                </p>
+            </form>
+
+            <!-- Register Form (Initially Hidden) -->
+            <form id="register-form" class="auth-form hidden">
+                <h2 class="text-2xl font-semibold mb-6 text-white text-center">Register</h2>
+                <input type="email" id="register-email" class="input-field" placeholder="Email" required>
+                <input type="password" id="register-password" class="input-field" placeholder="Password" required>
+                <input type="password" id="register-confirm-password" class="input-field" placeholder="Confirm Password" required>
+                <button type="submit" id="register-button" class="auth-button">Create Account</button>
+                <p class="mt-4 text-center text-sm text-gray-400">
+                    Already have an account? <a href="#" id="show-login" class="text-var(--purple) hover:text-var(--purple-2) font-medium">Login</a>
+                </p>
+            </form>
+
+        </div>
+    </div>
+
+
+    <!-- --- 2. CHAT VIEW (Initially Hidden) --- -->
+    <div id="chat-view" class="flex flex-col items-center gap-4">
+        <!-- Eyes row: the two purple squares -->
+        <div id="eyes" class="mb-4">
+            <div id="eyeL" class="eye" aria-hidden="true"></div>
+            <div id="eyeR" class="eye" aria-hidden="true"></div>
+        </div>
+
+        <div id="chat-content" class="flex flex-col items-center gap-4">
+            <div id="chat-container" class="glass-container p-4 rounded-xl">
+                <!-- messages go here -->
+            </div>
+
+            <form id="input-form" class="flex w-[420px] max-w-full">
+                <button type="button" id="voice-button" class="px-3 py-3 mr-2 bg-gray-700 text-white font-bold rounded-lg hover:bg-gray-600 transition-all duration-300 transform active:scale-95 text-xl" title="Voice Message">
+                    🎤
+                </button>
+                <button type="button" id="tool-button" class="px-3 py-3 mr-2 bg-gray-700 text-white font-bold rounded-lg hover:bg-gray-600 transition-all duration-300 transform active:scale-95 text-xl" title="AI Tools">
+                    ✨
+                </button>
+                <input type="text" id="user-input" placeholder="Type your message..." required
+                    class="flex-grow p-3 border border-r-0 border-purple-500 rounded-l-lg bg-gray-900 text-white text-base focus:ring-2 focus:ring-purple-400 focus:outline-none">
+                <button type="submit" id="send-button" class="px-5 py-3 bg-[#9333ea] text-white font-bold rounded-r-lg hover:bg-[#a855f7] transition-all duration-300 transform active:scale-95">
+                    Send
+                </button>
+            </form>
+        </div>
+    </div>
+
+<script>
+    // --- Safe DOM references ---
+    const chatView = document.getElementById("chat-view");
+    const chatContainer = document.getElementById("chat-container");
+    const inputForm = document.getElementById("input-form");
+    const userInput = document.getElementById("user-input");
+    const sendButton = document.getElementById("send-button");
+    const voiceButton = document.getElementById("voice-button"); // New Voice button
+    const toolButton = document.getElementById("tool-button"); // New Tool button
+    const toolModal = document.getElementById("tool-modal"); // New Tool Modal
+    const voiceModal = document.getElementById("voice-modal"); // New Voice Modal
+    const eyeL = document.getElementById("eyeL");
+    const eyeR = document.getElementById("eyeR");
+
+    // Voice recording elements
+    const startRecordBtn = document.getElementById("start-record");
+    const stopRecordBtn = document.getElementById("stop-record");
+    const cancelRecordBtn = document.getElementById("cancel-record");
+    const voiceTimer = document.getElementById("voice-timer");
+    const voiceWave = document.getElementById("voice-wave");
+
+    const header = document.getElementById("header");
+    const navMenu = document.getElementById("nav-menu");
+    const menuIcon = document.getElementById("menu-icon");
+    const logoutButton = document.getElementById("logout-button");
+    const aboutLink = document.getElementById("about-link");
+    const contactLink = document.getElementById("contact-link");
+
+    const loginView = document.getElementById("login-view");
+    const loginForm = document.getElementById("login-form");
+    const registerForm = document.getElementById("register-form");
+    const authMessage = document.getElementById("auth-message");
+    const showRegisterLink = document.getElementById("show-register");
+    const showLoginLink = document.getElementById("show-login");
+
+    let chatHistory = [];
+    const initialMessage = "Welcome back! What can I help you with today?";
+    const API_BASE = ''; 
+
+    // Voice recording variables
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let recordingTimer = null;
+    let recordingSeconds = 0;
+    let audioContext = null;
+    let analyser = null;
+    let microphone = null;
+    let javascriptNode = null;
+
+    // --- UTILITIES ---
+
+    function showAuthMessage(message, isError = true) {
+        authMessage.textContent = message;
+        authMessage.classList.remove('hidden', 'bg-red-800/50', 'bg-green-800/50');
+        authMessage.classList.add(isError ? 'bg-red-800/50' : 'bg-green-800/50');
+        setTimeout(() => authMessage.classList.add('hidden'), 5000);
+    }
+    
+    function setAuthButtonsDisabled(disabled) {
+        document.getElementById("login-button").disabled = disabled;
+        document.getElementById("register-button").disabled = disabled;
+    }
+
+    function setChatEnabled(enabled) {
+        sendButton.disabled = !enabled;
+        toolButton.disabled = !enabled;
+        voiceButton.disabled = !enabled;
+        userInput.disabled = !enabled;
+    }
+
+    function closeModal(event) {
+        if (event.target === toolModal) {
+            toolModal.style.display = 'none';
+        }
+    }
+
+    function closeVoiceModal(event) {
+        if (event.target === voiceModal) {
+            stopRecording();
+            voiceModal.style.display = 'none';
+        }
+    }
+
+    // --- VIEW MANAGEMENT ---
+
+    function showAuthView() {
+        sessionStorage.removeItem('authToken');
+        header.style.display = 'none';
+        chatView.style.display = 'none';
+        document.getElementById("eyes").style.display = 'none';
+        loginView.style.display = 'flex';
+
+        loginForm.reset();
+        registerForm.reset();
+        chatHistory = [];
+        chatContainer.innerHTML = '';
+    }
+
+    function showChatView() {
+        header.style.display = 'block';
+        loginView.style.display = 'none';
+        chatView.style.display = 'flex';
+        document.getElementById("eyes").style.display = 'flex';
+
+        loadChatHistory();
+    }
+    
+    // --- CHAT LOGIC (Same as before, but with Auth token) ---
+
+    // Set visual state on eyes
+    function setState(state) {
+        eyeL.className = "eye";
+        eyeR.className = "eye";
+        if (state) {
+            eyeL.classList.add(state);
+            eyeR.classList.add(state);
+        }
+    }
+
+    function addMessage(text, sender, isNewMessage = true, isTool = false, isVoice = false, voiceBlob = null) {
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('message', isTool ? 'tool-message' : (sender === 'user' ? 'user-message' : 'bot-message'));
+        
+        if (isVoice && voiceBlob) {
+            // Create voice message UI
+            const voiceMessageDiv = document.createElement('div');
+            voiceMessageDiv.classList.add('voice-message');
+            
+            const playButton = document.createElement('div');
+            playButton.classList.add('play-button');
+            playButton.innerHTML = '▶';
+            playButton.onclick = () => playVoiceMessage(voiceBlob);
+            
+            const durationSpan = document.createElement('span');
+            durationSpan.classList.add('duration');
+            durationSpan.textContent = formatDuration(recordingSeconds);
+            
+            const textSpan = document.createElement('span');
+            textSpan.textContent = text || "Voice message";
+            
+            voiceMessageDiv.appendChild(playButton);
+            voiceMessageDiv.appendChild(durationSpan);
+            voiceMessageDiv.appendChild(textSpan);
+            
+            messageDiv.appendChild(voiceMessageDiv);
+        } else {
+            messageDiv.textContent = text;
+        }
+
+        chatContainer.appendChild(messageDiv);
+        
+        if (isNewMessage && !isTool) {
+            chatHistory.push({ 
+                role: sender, 
+                text,
+                isVoice: isVoice,
+                voiceBlob: isVoice ? URL.createObjectURL(voiceBlob) : null
+            });
+            sessionStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+        }
+
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    
+    function loadChatHistory() {
+        const savedHistory = sessionStorage.getItem('chatHistory');
+        if (savedHistory) {
+            try {
+                const parsedHistory = JSON.parse(savedHistory);
+                chatHistory = parsedHistory; 
+                // Re-render old messages (passing false for isNewMessage)
+                parsedHistory.forEach(m => {
+                    if (m.isVoice && m.voiceBlob) {
+                        // Convert the string back to a blob URL
+                        fetch(m.voiceBlob)
+                            .then(res => res.blob())
+                            .then(blob => {
+                                addMessage(m.text, m.role, false, false, true, blob);
+                            })
+                            .catch(() => {
+                                // If blob loading fails, show text only
+                                addMessage(m.text || "Voice message", m.role, false);
+                            });
+                    } else {
+                        addMessage(m.text, m.role, false);
+                    }
+                });
+                if (parsedHistory.length === 0) {
+                    addMessage(initialMessage, 'bot');
+                }
+            } catch (e) {
+                console.error("Failed to parse saved history:", e);
+                addMessage(initialMessage, 'bot');
+            }
+        } else {
+            addMessage(initialMessage, 'bot');
+        }
+    }
+
+    async function handleChat(event) {
+        event.preventDefault();
+        const userMessage = userInput.value.trim();
+        if (!userMessage) return;
+
+        addMessage(userMessage, 'user');
+        userInput.value = '';
+        setChatEnabled(false);
+
+        const authToken = sessionStorage.getItem('authToken');
+        if (!authToken) {
+            showAuthMessage("Session expired. Please log in again.", true);
+            showAuthView();
+            return;
+        }
+
+        setState('thinking');
+
+        try {
+            // Prepare history for API call
+            const historyToSend = chatHistory.slice(0, -1).map(m => ({
+                role: m.role === 'bot' ? 'model' : m.role,
+                parts: [{ text: m.text }]
+            }));
+
+            const resp = await fetch(API_BASE + '/api/chat', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}` 
+                },
+                body: JSON.stringify({ prompt: userMessage, history: historyToSend })
+            });
+
+            const data = await resp.json();
+
+            if (resp.ok && data?.text) {
+                setState('reply');
+                await new Promise(r => setTimeout(r, 420));
+                setState('talking');
+                addMessage(data.text, 'bot');
+            } else if (resp.status === 401) {
+                showAuthMessage("Your session expired. Please log in.", true);
+                sessionStorage.removeItem('chatHistory');
+                showAuthView();
+            } else {
+                chatHistory.pop();
+                sessionStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+                addMessage("Server error: " + (data?.error || "Unknown error"), 'bot');
+            }
+        } catch (err) {
+            console.error('Chat error:', err);
+            chatHistory.pop();
+            sessionStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+            addMessage("Error: Couldn't reach the server. Check your network or server status.", 'bot');
+        } finally {
+            setChatEnabled(true);
+            setTimeout(() => setState(''), 800);
+        }
+    }
+
+    // --- VOICE MESSAGE LOGIC ---
+
+    function formatDuration(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function updateTimer() {
+        recordingSeconds++;
+        voiceTimer.textContent = formatDuration(recordingSeconds);
+    }
+
+    function startRecording() {
+        // Reset state
+        audioChunks = [];
+        recordingSeconds = 0;
+        voiceTimer.textContent = "00:00";
+        voiceWave.style.transform = "scaleX(0)";
+        
+        // Show stop button, hide start button
+        startRecordBtn.style.display = 'none';
+        stopRecordBtn.style.display = 'block';
+        
+        // Start timer
+        recordingTimer = setInterval(updateTimer, 1000);
+        
+        // Request microphone access
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(stream => {
+                // Set up audio context for visualization
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+                javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
+                
+                analyser.smoothingTimeConstant = 0.8;
+                analyser.fftSize = 1024;
+                
+                microphone.connect(analyser);
+                analyser.connect(javascriptNode);
+                javascriptNode.connect(audioContext.destination);
+                
+                javascriptNode.onaudioprocess = function() {
+                    const array = new Uint8Array(analyser.frequencyBinCount);
+                    analyser.getByteFrequencyData(array);
+                    const values = array.reduce((a, b) => a + b) / array.length;
+                    
+                    // Update visualization
+                    const scale = Math.min(1, values / 100);
+                    voiceWave.style.transform = `scaleX(${scale})`;
+                };
+                
+                // Set up media recorder
+                mediaRecorder = new MediaRecorder(stream);
+                
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = () => {
+                    // Clean up audio context
+                    if (javascriptNode) javascriptNode.disconnect();
+                    if (microphone) microphone.disconnect();
+                    if (analyser) analyser.disconnect();
+                    if (audioContext) audioContext.close();
+                    
+                    // Stop all tracks
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    // Create audio blob
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    
+                    // Send voice message
+                    sendVoiceMessage(audioBlob);
+                };
+                
+                // Start recording
+                mediaRecorder.start();
+            })
+            .catch(err => {
+                console.error('Error accessing microphone:', err);
+                alert('Could not access your microphone. Please check permissions.');
+                stopRecording();
+            });
+    }
+
+    function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+        }
+        
+        // Reset UI
+        clearInterval(recordingTimer);
+        startRecordBtn.style.display = 'block';
+        stopRecordBtn.style.display = 'none';
+        voiceWave.style.transform = "scaleX(0)";
+        
+        // Close modal
+        voiceModal.style.display = 'none';
+    }
+
+    function cancelRecording() {
+        stopRecording();
+        voiceModal.style.display = 'none';
+    }
+
+    function playVoiceMessage(blob) {
+        const audio = new Audio(URL.createObjectURL(blob));
+        audio.play();
+    }
+
+    async function sendVoiceMessage(audioBlob) {
+        setChatEnabled(false);
+        setState('thinking');
+        
+        // For now, we'll just add a placeholder message
+        // In a real implementation, you would send the audio to a speech-to-text API
+        // and then send the transcribed text to the chatbot
+        
+        addMessage("Voice message", 'user', true, false, true, audioBlob);
+        
+        // Simulate processing time
+        setTimeout(() => {
+            setState('reply');
+            setTimeout(() => {
+                setState('talking');
+                addMessage("I received your voice message! In a full implementation, this would be transcribed and processed.", 'bot');
+                setChatEnabled(true);
+                setTimeout(() => setState(''), 800);
+            }, 420);
+        }, 1500);
+        
+        // In a real implementation, you would:
+        // 1. Send the audioBlob to a speech-to-text service
+        // 2. Get the transcribed text
+        // 3. Send that text to the chatbot API
+        // 4. Display the response
+    }
+
+    // --- NEW GEMINI TOOL LOGIC ---
+
+    async function handleGeminiTool(toolType) {
+        toolModal.style.display = 'none';
+
+        if (chatHistory.length <= 1) { // Only the initial welcome message
+            addMessage("Conversation history is too short. Try chatting a bit first!", 'bot', true, true);
+            return;
+        }
+
+        const authToken = sessionStorage.getItem('authToken');
+        if (!authToken) {
+            showAuthMessage("Session expired. Please log in again.", true);
+            showAuthView();
+            return;
+        }
+
+        addMessage(`Running AI Tool: ${toolType.charAt(0).toUpperCase() + toolType.slice(1)}...`, 'system', false, true);
+        setChatEnabled(false);
+        setState('thinking');
+
+        try {
+            const resp = await fetch(API_BASE + `/api/tool/${toolType}`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}` 
+                },
+                // Send the full current chat history for analysis
+                body: JSON.stringify({ history: chatHistory })
+            });
+
+            const data = await resp.json();
+
+            if (resp.ok && data?.text) {
+                setState('reply');
+                await new Promise(r => setTimeout(r, 420));
+                setState('talking');
+                addMessage(data.text, 'bot');
+            } else if (resp.status === 401) {
+                showAuthMessage("Your session expired. Please log in.", true);
+                sessionStorage.removeItem('chatHistory');
+                showAuthView();
+            } else {
+                addMessage(`Tool Error: ${data.message || data.error || 'Failed to process AI tool request.'}`, 'system', false, true);
+            }
+        } catch (err) {
+            console.error('Tool error:', err);
+            addMessage("Network Error: Could not connect to the tool server.", 'system', false, true);
+        } finally {
+            setChatEnabled(true);
+            setTimeout(() => setState(''), 800);
+        }
+    }
+
+
+    // --- AUTHENTICATION LOGIC ---
+
+    async function handleAuth(event, endpoint) {
+        event.preventDefault();
+        setAuthButtonsDisabled(true);
+        authMessage.classList.add('hidden');
+
+        const formId = endpoint === 'login' ? 'login-' : 'register-';
+        const email = document.getElementById(formId + 'email').value;
+        const password = document.getElementById(formId + 'password').value;
+        const confirmPassword = endpoint === 'register' ? document.getElementById('register-confirm-password').value : null;
+
+        if (endpoint === 'register' && password !== confirmPassword) {
+            showAuthMessage("Passwords do not match.", true);
+            setAuthButtonsDisabled(false);
+            return;
+        }
+
+        try {
+            const payload = { email, password };
+            if (endpoint === 'register') payload.username = email;
+
+            const resp = await fetch(API_BASE + `/api/auth/${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await resp.json();
+
+            if (resp.ok && data.token) {
+                sessionStorage.setItem('authToken', data.token);
+                sessionStorage.removeItem('chatHistory'); 
+                showChatView();
+            } else {
+                showAuthMessage(data.message || `Authentication failed: ${data.error || 'Unknown error'}`, true);
+            }
+        } catch (err) {
+            showAuthMessage("Network error. Could not connect to the authentication server.", true);
+            console.error(err);
+        } finally {
+            setAuthButtonsDisabled(false);
+        }
+    }
+
+    // --- INITIALIZATION ---
+
+    function initializeApp() {
+        // --- Form Submission Handlers ---
+        loginForm.addEventListener('submit', (e) => handleAuth(e, 'login'));
+        registerForm.addEventListener('submit', (e) => handleAuth(e, 'register'));
+
+        // --- Auth View Toggles ---
+        showRegisterLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            loginForm.classList.add('hidden');
+            registerForm.classList.remove('hidden');
+        });
+        showLoginLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            registerForm.classList.add('hidden');
+            loginForm.classList.remove('hidden');
+        });
+
+        // --- Chat & Nav Handlers ---
+        inputForm.addEventListener('submit', handleChat);
+        voiceButton.addEventListener('click', () => { 
+            if (voiceButton.disabled) return;
+            voiceModal.style.display = 'flex'; 
+        }); // Show voice modal
+        toolButton.addEventListener('click', () => { 
+            if (toolButton.disabled) return;
+            toolModal.style.display = 'flex'; 
+        }); // Show tool modal
+        
+        // Voice recording handlers
+        startRecordBtn.addEventListener('click', startRecording);
+        stopRecordBtn.addEventListener('click', stopRecording);
+        cancelRecordBtn.addEventListener('click', cancelRecording);
+        
+        menuIcon.addEventListener('click', () => navMenu.classList.toggle('active'));
+        logoutButton.addEventListener('click', () => { 
+            sessionStorage.removeItem('authToken'); 
+            sessionStorage.removeItem('chatHistory'); 
+            navMenu.classList.remove('active');
+            showAuthView(); 
+        });
+
+        // Simple alerts for nav links
+        aboutLink.addEventListener('click', e => { e.preventDefault(); alert("Btl — a simple AI chatbot."); navMenu.classList.remove('active'); });
+        contactLink.addEventListener('click', e => { e.preventDefault(); alert("No contact info yet."); navMenu.classList.remove('active'); });
+
+        // --- Initial Auth Check ---
+        const token = sessionStorage.getItem('authToken');
+        if (token) {
+            showChatView();
+        } else {
+            showAuthView();
+        }
+
+        initializeEyeTracking();
+    }
+
+
+    // --- EYE TRACKING LOGIC (Kept for visual flair) ---
+    function initializeEyeTracking() {
+        const MAX_DIST = 14;
+
+        function onMove(clientX, clientY) {
+            if (chatView.style.display !== 'flex') return;
+
+            [eyeL, eyeR].forEach(eye => {
+                const rect = eye.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+
+                const dx = clientX - cx;
+                const dy = clientY - cy;
+
+                const angle = Math.atan2(dy, dx);
+                const dist = Math.min(MAX_DIST, Math.hypot(dx, dy) * 0.06);
+
+                const x = Math.cos(angle) * dist;
+                const y = Math.sin(angle) * dist;
+
+                eye.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+            });
+        }
+
+        document.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
+        document.addEventListener('touchmove', (e) => {
+            if (e.touches[0]) onMove(e.touches[0].clientX, e.touches[0].clientY);
+        });
+
+        document.addEventListener('mouseleave', () => {
+            eyeL.style.transform = '';
+            eyeR.style.transform = '';
+        });
+    }
+
+    initializeApp();
+</script>
+
+</body>
+</html>
